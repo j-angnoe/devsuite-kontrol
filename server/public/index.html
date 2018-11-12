@@ -1,0 +1,229 @@
+<html>
+<head>
+    <script src="//unpkg.com/jquery@3.1.1/dist/jquery.min.js"></script>
+    <link  href="//unpkg.com/bootstrap@4/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link  href="https://unpkg.com/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="//unpkg.com/vue-blocks/dist/vue-blocks.js"></script>
+    <script src="//unpkg.com/axios/dist/axios.min.js"></script>
+    <link href="/style.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="app-container">
+    <app></app>
+</div>
+
+
+<template component="app">
+    <div>
+        <div class="navbar navbar-expand-sm sticky-top navbar-dark bg-dark">
+            <div class="navbar-brand">
+                <span v-if="data&&data.package">{{data.package.name}} {{data.package.version}}</span>
+            </div>
+            <my-navigation></my-navigation>
+        </div>
+
+        <div v-if="data" class="container pt-3">
+            <router-view></router-view>
+        </div>
+    </div>
+    <script>
+    export default {
+        data() {
+            return {
+                data: null,
+            }
+        },
+        
+        mounted() {
+            window.app = this;
+            Vue.prototype.app = this;
+
+            this.reload();
+        },
+        methods: {
+            is_installed(module) {
+                return ~this.data.ACTIVE_MODULES.indexOf(module)
+            },
+            async reload() {
+                this.data = await fetch('/api/context').then(res => res.json())
+            }
+        }
+    }
+    </script>
+</template>
+
+
+<template component="my-navigation">
+    <div class="navbar-nav" >
+        <div class="nav-item">
+            <router-link to="/" class="nav-link">Home</router-link>
+        </div>
+        <div class="nav-item">
+            <router-link to="/docker" class="nav-link">Docker status</router-link>
+        </div>
+        <div class="nav-item">
+            <router-link to="/debug" class="nav-link">Debug</router-link>
+        </div>
+    </div>
+</template>
+
+
+
+<template url="/">
+    <div>
+        <div v-if="active_modules.length">
+            <h2>Active modules ({{active_modules.length}})</h2>
+            <div v-for="m in active_modules">
+                <h3>
+                    <i class="fa fa-check"></i> 
+                    <router-link :to="'/mod/'+m">{{m}}</router-link>
+                </h3>
+            </div>
+        </div>
+        <div>
+            Other modules:
+            <div v-for="m in inactive_modules">
+                <div>
+                    <router-link :to="`/mod/${m}`">{{m}}</router-link>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    export default {
+        computed: {
+            active_modules() {
+                return this.app.data.ACTIVE_MODULES
+            },
+            inactive_modules() {
+                return this.app.data.MODULES.filter(m => {
+                    return !~this.active_modules.indexOf(m)
+                })
+            }
+        }
+    }
+    </script>
+</template>
+
+
+
+<template url="/docker">
+    <div>
+        <pre style="font-size:10px;">{{status}}</pre>
+
+        
+        <button @click="reload()">
+            <i class="fa fa-repeat"></i>
+        </button>
+
+        <button @click="start()">
+            <i class="fa fa-play"></i>
+        </button>
+
+        <button @click="stop()">
+            <i class="fa fa-stop"></i>
+        </button>
+    </div>
+    <script>
+    export default {
+        data() {
+            return {
+                status: '...'
+            }
+        },
+
+        mounted() {
+            this.reload_status()
+        },
+
+        methods: {
+            async reload_status() {
+                this.status = '...'
+                this.status = await fetch('/api/docker/status').then(res => res.text())
+            },
+            
+            async start() {
+                this.status = '...'
+                this.status = await fetch('/api/docker/start').then(res => res.text())
+                this.reload_status();
+            },
+            
+            async stop() {
+                this.status = '...'
+                this.status = await fetch('/api/docker/stop').then(res => res.text())
+                this.reload_status();
+            },
+            
+        }
+        
+    }
+    </script>
+</template>
+
+
+<template url="/mod/:module_name">
+    <div>
+        <h3>{{$route.params.module_name}}:</h3>
+
+        <p>Status: {{is_installed ? 'installed' : 'not installed'}}</p>
+
+        <pre>{{data}}</pre>
+
+        <div v-if="is_installed">
+            <button :disabled="busy" @click="deactivate_module()">Deactivate</button>
+            <i class="fa fa-spin fa-spinner" v-if="busy"></i>
+        </div>
+        <div v-else>
+            <button :disabled="busy" @click="activate_module()">Activate</button>
+            <i class="fa fa-spin fa-spinner" v-if="busy"></i>
+        </div>
+    </div>
+    <script>
+    export default {
+        computed: {
+            module_name() {
+                return this.$route.params.module_name
+            },
+            is_installed() {
+                return this.app.is_installed(this.module_name)
+            }
+        },
+        data() {
+            return {
+                data: null,
+                busy: false
+            }
+        },
+        async mounted() {
+            this.data = 'loading';
+            this.data = await fetch('/api/mod/' + this.module_name).then(res => res.json())
+        },
+
+        methods: {
+            async activate_module() {
+                this.busy = true;
+                await axios.post('/api/mod/' + this.module_name + '/activate');
+                this.busy = false;
+                this.app.reload();
+            },
+            async deactivate_module() {
+                this.busy = true;
+                await axios.post('/api/mod/' + this.module_name + '/deactivate');
+                this.busy = false;
+                this.app.reload();
+            }
+        }
+    }
+    </script>
+</template>
+
+
+<template url="/debug">
+    <pre>{{app.data}}</pre>
+</template>
+
+
+
+</body>
+</html>

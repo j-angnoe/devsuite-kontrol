@@ -1,0 +1,9 @@
+{
+  "name": "kontrol-server",
+  "version": "0.0.1",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.16.4"
+  }
+}

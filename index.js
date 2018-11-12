@@ -109,6 +109,35 @@ require('yargs')
             console.log(`${mod}: ${status}`)
         })
     })
+    .command({
+        command: 'serve',
+        desc: 'Simple web-frontend for kontrol',
+        builder(yargs) {
+            yargs.option('port', {default: 9000});
+        },  
+        handler: async (argv) => {
+            var server_path = path.join(__dirname, 'server');
+
+            if (!fs.existsSync(server_path + '/node_modules')) {
+                console.log("Installing server deps...");
+                await spawn('npm', ['install'], {
+                    cwd: server_path,
+                    stdio: 'inherit'
+                });
+            }
+
+            require('./server/index.js').serve({
+                ROOT,
+                MODULE_DIR,
+                MODULES,
+                ACTIVE_MODULES,
+                ACTIVE_MODULES_FILE,
+                FORCED_MODULES,
+                MODULE_BUNDLES,
+                port: argv.port
+            });
+        }
+    })
     .demandCommand(1)
     .help()
     .argv
@@ -194,7 +223,7 @@ async function command_activate_module(argv) {
             await _activate_single_module(module);
         } else if (module in MODULE_BUNDLES) {
             // Sequential, because of interactivity.
-            for (let m in MODULE_BUNDLES[module]) {
+            for (let m of MODULE_BUNDLES[module]) {
                 await _activate_single_module(m);
             }
         }
@@ -239,6 +268,15 @@ async function _activate_single_module(module) {
             await _activate_single_module(dep);
         }
     }));
+
+    if (moduleObject.deactivate) {
+        // may be a string, or an array of strings.
+        var deactivate = [].concat(moduleObject.deactivate);
+        await Promise.all(deactivate.map(async (dea) => {
+            console.log(`${dea} needs to be deactivated by ${module}`)
+            await _deactivate_single_module(dea);
+        }));
+    }
     
 
     // Download and install 
