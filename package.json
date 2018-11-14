@@ -1,9 +1,9 @@
 {
   "name": "@vodafone/devsuite-kontrol",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Development suite control via cli",
-  "bin" : {
-    "kontrol" : "./kontrol"
+  "bin": {
+    "kontrol": "./kontrol"
   },
   "main": "index.js",
   "author": "Joshua Angnoe <joshua@fluxfx.nl>",
