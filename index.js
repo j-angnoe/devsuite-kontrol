@@ -55,11 +55,9 @@ var ACTIVE_MODULES = FORCED_MODULES.concat([]);
 
 readActiveModules();
 
-const MODULES = glob.sync(path.join(MODULE_DIR,'*','module.json')).map(file => {
-    return path.basename(path.dirname(file))
-});
+const MODULES = listModules();
 
-var MODULE_CHOICES = MODULES.concat(Object.keys(MODULE_BUNDLES));
+var MODULE_CHOICES = MODULES.map(m => m.name).concat(Object.keys(MODULE_BUNDLES));
 
 // Starts cli dispatch
 require('yargs')
@@ -100,13 +98,29 @@ require('yargs')
     })
     .command('list', 'List available modules', {}, () => {
         console.log("Available modules:")
-        console.log(" - " + MODULES.join("\n - "))
+        console.log(listModules().map(m => {
+            return ` - ${m.name} (${m.path.replace(ROOT, '')})\n`
+        }));
+    })
+    .command({
+        command: 'info <module>',
+        desc: 'Show module info',
+        builder: (yargs) => {
+            yargs.choices('module', MODULE_CHOICES)
+        },  
+        handler: (argv) => {
+            var mod = getModule(argv.module)
+            console.log({
+                module: mod,
+                files: glob.sync(path.join(mod.path, '*'))
+            });
+        }
     })
     .command('status', 'List module status', {}, () => {
         console.log("Module status");
         MODULES.map(mod => {
-            var status = ~ACTIVE_MODULES.indexOf(mod) ? 'active' : 'inactive';
-            console.log(`${mod}: ${status}`)
+            var status = ~ACTIVE_MODULES.indexOf(mod.name) ? 'active' : 'inactive';
+            console.log(`${mod.name}: ${status}`)
         })
     })
     .demandCommand(1)
@@ -114,18 +128,54 @@ require('yargs')
     .argv
 ;
 
+function listModules() {
+    var INTERNAL_MODULES = glob.sync(path.join(MODULE_DIR,'*','module.json')).map(file => {
+        return path.basename(path.dirname(file))
+    });
+    
+    var ACTIVE_MODULES = readActiveModules();
+
+    var INTERNAL_MODULES = INTERNAL_MODULES.map(mod => {
+        return {
+            name: mod,
+            path: path.join(MODULE_DIR, mod),
+            status: ~ACTIVE_MODULES.indexOf(mod) ? 'active' : 'inactive'
+        }
+    });
+
+    var EXTERNAL_MODULES = [];
+
+    if (kontrolRc && kontrolRc.listModuleDirectories) {
+        [].concat(kontrolRc.listModuleDirectories()).map(dir => {
+            // test multimodule stuff: .kontrol/modulename/module.json files.
+            // find singlemodule stuff: .kontrol/module.json
+            var files = glob.sync(path.join(dir, '*', '.kontrol', '**', 'module.json'));
+            
+            EXTERNAL_MODULES = EXTERNAL_MODULES.concat(files).map(file => {
+                var obj = require(file);
+
+                return {
+                    name: obj.name,
+                    path: path.dirname(file),
+                    status: ~ACTIVE_MODULES.indexOf(obj.name) ? 'active' : 'inactive'
+                }
+            });
+        })
+    }
+    return EXTERNAL_MODULES.concat(INTERNAL_MODULES);
+}
+
+function getModule(name) {
+    var mods = listModules();
+    return mods.find(m => m.name == name);
+}
+
 async function command_generate(argv) {
     const DEBUG = argv && argv.verbose;
 
     console.log("Generating dynamic configs...");
 
-    var modulesMap = MODULES.map(mod => {
-        return {
-            module: mod,
-            status: ~ACTIVE_MODULES.indexOf(mod) ? 'active' : 'inactive'
-        }
-    })
-
+    var modulesMap = listModules();
 
     if ('generate' in kontrolRc) {
         var promises = kontrolRc.generate.map(async (work) => {
@@ -133,9 +183,9 @@ async function command_generate(argv) {
 
             if (work.find) {
                 
-                var files = modulesMap.map(({module, status}) => {
+                var files = modulesMap.map(({name, path, status}) => {
                     var filesToFind = work.find.map(file => file.replace(/\{status\}/g, status))
-                    return existingFile(path.join(MODULE_DIR, module), filesToFind);
+                    return existingFile(path, filesToFind);
                 }).filter(Boolean)
 
                 DEBUG && console.info(`${work.name} found files ${files.join("\n")}`);
@@ -190,7 +240,7 @@ async function command_activate_module(argv) {
     var module = normalizeModuleName(argv.module);
 
     try { 
-        if (~MODULES.indexOf(module)) {
+        if (MODULES.find(n => n.name == module)) {
             await _activate_single_module(module);
         } else if (module in MODULE_BUNDLES) {
             // Sequential, because of interactivity.
@@ -220,14 +270,15 @@ async function command_activate_module(argv) {
     await handle_restart_option(argv);
 }
 
-async function _activate_single_module(module) {
+async function _activate_single_module(name) {
 
-    console.log("Activating module " + module);
+    console.log("Activating module " + name);
 
-    // May fail. 
-    var moduleObject = require(`${MODULE_DIR}/${module}/module`);
-
-    // console.log(moduleObject);
+    var module = getModule(name);
+    if (!module) {
+        throw new(`Module ${name} could not be found.`);
+    }
+    var moduleObject = require(`${module.path}/module`);
 
     const conf = kontrolRc && kontrolRc.activate || false
 
@@ -235,10 +286,19 @@ async function _activate_single_module(module) {
     var deps = moduleObject.dependencies || [];
     await Promise.all(deps.map(async (dep) => {
         if (!~ACTIVE_MODULES.indexOf(dep)) {
-            console.log(`${dep} is a dependency of ${module}, activating it..`);
+            console.log(`${dep} is a dependency of ${name}, activating it..`);
             await _activate_single_module(dep);
         }
     }));
+
+    if (moduleObject.deactivate) {
+        // may be a string, or an array of strings.
+        var deactivate = [].concat(moduleObject.deactivate);
+        await Promise.all(deactivate.map(async (dea) => {
+            console.log(`${dea} needs to be deactivated by ${name}`)
+            await _deactivate_single_module(dea);
+        }));
+    }
     
 
     // Download and install 
@@ -278,7 +338,7 @@ async function _activate_single_module(module) {
         await handler(moduleObject, kontrolRcSharedServices);
     }
 
-    var installScript = path.join(MODULE_DIR, module, 'install'); 
+    var installScript = path.join(MODULE_DIR, name, 'install'); 
     if (fs.existsSync(installScript)) {
         console.log(`Running module install script (${installScript})`);
         await spawn(installScript, {
@@ -289,7 +349,7 @@ async function _activate_single_module(module) {
 
     // Post install scripts will only run if the entire 
     // install (including dependencies) is succesful.
-    var postInstallScript = path.join(MODULE_DIR, module, 'postinstall'); 
+    var postInstallScript = path.join(MODULE_DIR, name, 'postinstall'); 
     if (fs.existsSync(postInstallScript)) {
         console.log(`Registering install script (${postInstallScript})`);
         registerPostInstall(() => {
@@ -300,9 +360,9 @@ async function _activate_single_module(module) {
         });
     }
     
-    if (!~ACTIVE_MODULES.indexOf(module)) {
+    if (!~ACTIVE_MODULES.indexOf(name)) {
         console.info("Adding module to ACTIVE_MODULES");
-        ACTIVE_MODULES.push(module);
+        ACTIVE_MODULES.push(name);
     } else {
         console.info("Module was already in ACTIVE_MODULES");
     }
@@ -315,7 +375,8 @@ async function _activate_single_module(module) {
 async function command_deactivate_module(argv) {
 
     var module = normalizeModuleName(argv.module);
-    if (~MODULES.indexOf(module)) {
+
+    if (MODULES.find(n => n.name === module)) {
        await _deactivate_single_module(module, argv);
     } else if (module in MODULE_BUNDLES) {
         await Promise.all(MODULE_BUNDLES[module].map(m => _deactivate_single_module(m, argv)))
@@ -323,20 +384,25 @@ async function command_deactivate_module(argv) {
 
     command_generate(argv);
 }
-async function _deactivate_single_module(module, argv) {
+async function _deactivate_single_module(name, argv) {
     argv = argv || {};
 
-    var moduleObject = require(`${MODULE_DIR}/${module}/module`);
+    var module = getModule(name);
+
+    if (!module) {
+        throw new(`Module ${name} could not be found.`);
+    }
+    var moduleObject = require(`${module.path}/module`);
 
     const conf = kontrolRc || false
 
-    if (!~ACTIVE_MODULES.indexOf(module)) {
-        console.log(`Module ${module} is not active.`);
+    if (!~ACTIVE_MODULES.indexOf(name)) {
+        console.log(`Module ${name} is not active.`);
         return;
     }
 
-    if (~FORCED_MODULES.indexOf(module)) {
-        console.log(`${module} is a mandatory module and will not be deactived.`)
+    if (~FORCED_MODULES.indexOf(name)) {
+        console.log(`${name} is a mandatory module and will not be deactived.`)
         return;
     }
 
@@ -345,16 +411,17 @@ async function _deactivate_single_module(module, argv) {
         await handler(moduleObject, kontrolRcSharedServices)
     }
 
-    ACTIVE_MODULES = ACTIVE_MODULES.filter(mod => mod !== module)
+    // Remote module from ACTIVE_MODULES:
+    ACTIVE_MODULES = ACTIVE_MODULES.filter(mod => mod !== name)
 
     if (argv['delete']) {
-        let repo = moduleObject.repository;
+        let repo_dir = moduleObject.directory || path.basename(moduleObject.repository);
 
-        let repo_dir = moduleObject.directory || path.basename(repo);
         if (!(conf && conf.activate && conf.activate.resolveDirectory)) {   
             console.log('Please configure ./kontrolrc activate.resolveDirectory')
             process.exit(1);
         }
+
         repo_dir = conf.activate.resolveDirectory(repo_dir);
         
         if (repo_dir.indexOf(ROOT) == -1) {
@@ -371,8 +438,7 @@ async function _deactivate_single_module(module, argv) {
     writeActiveModulesFile();
 
 
-    console.log(`Deactivated ${module}`);
-
+    console.log(`Deactivated ${name}`);
 }
 
 function normalizeModuleName(mod) {
@@ -422,6 +488,8 @@ function readActiveModules() {
         modulesFromFile = [];
     }
     ACTIVE_MODULES = FORCED_MODULES.concat(modulesFromFile);
+
+    return ACTIVE_MODULES;
 }
 
 function writeActiveModulesFile() {
