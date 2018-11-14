@@ -4,6 +4,11 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.16.4"
+    "axios": "^0.18.0",
+    "bootstrap": "4",
+    "express": "^4.16.4",
+    "font-awesome": "4.7",
+    "jquery": "3.1",
+    "vue-blocks": "^0.1.3"
   }
 }

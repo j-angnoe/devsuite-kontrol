@@ -6,7 +6,7 @@ var fs = require('fs');
 
 
 function serve(options) {
-    var {ROOT, MODULE_DIR, ACTIVE_MODULES, ACTIVE_MODULES_FILE, FORCED_MODULES, port} = options;
+    var {ROOT, MODULES, ACTIVE_MODULES, FORCED_MODULES, port, getModule, readActiveModules} = options;
 
     var KONTROL_BIN = path.join(ROOT, 'kontrol');
 
@@ -14,9 +14,12 @@ function serve(options) {
 
     app.use(express.static(path.join(__dirname, 'public')));
 
+    // Never expose your entire node_modules map in production systems!
+    app.use('/node_modules', express.static(path.join(__dirname, 'node_modules')));
+
     app.get('/api/context', (req, res) => {
         res.send({
-            ...options,
+            MODULES,
             ACTIVE_MODULES,
             package: require(ROOT +'/package')
         });
@@ -41,8 +44,13 @@ function serve(options) {
         res.send(status.stdout)
     })
     app.get('/api/mod/:name', async (req, res) => {
+        var name = req.params.name;
+
         try {
-            var mod = require(path.join(MODULE_DIR, req.param('name'), 'module'));
+            // Read module.json
+            var mod = require(path.join(getModule(name).path, 'module'));
+
+            // dir from module.json
             var dir = mod.directory || path.basename(mod.repository || '') || false;
 
             var data = {
@@ -54,6 +62,8 @@ function serve(options) {
 
             res.send(data);
         } catch (err) {
+            console.log(`GET /api/mod/${name} - 500`)
+            console.error(err);
             res.status(500).send({error: err});
         }
     });
@@ -62,38 +72,28 @@ function serve(options) {
             cwd: ROOT,
             stdio: 'inherit'
         }) 
+
+        ACTIVE_MODULES = readActiveModules();
+
         res.send({success: true});
-        readActiveModules();
+
+        
     })
     app.post('/api/mod/:name/deactivate', async (req, res) => {
         await spawn(KONTROL_BIN, ['deactivate', req.params.name, '--restart'], {
             cwd: ROOT,
             stdio: 'inherit'
         }) 
+
+        ACTIVE_MODULES = readActiveModules();
+
         res.send({success: true});
-        readActiveModules();
+        
     })
     // test
     app.listen(port);
 
     console.log("Listening on port " + port);
-
-
-    function readActiveModules() {
-        var modulesFromFile;
-        try {
-            modulesFromFile =  fs.readFileSync(ACTIVE_MODULES_FILE).toString().split("\n").filter(Boolean).filter(line => {
-                return !line.match(/^\s*#/)
-            })
-        } catch (readError) {
-            console.error(readError);
-            modulesFromFile = [];
-        }
-        ACTIVE_MODULES = FORCED_MODULES.concat(modulesFromFile);
-
-        console.log('ACTIVE_MODULES', ACTIVE_MODULES)
-    }
-
 }
 
 module.exports.serve = serve;

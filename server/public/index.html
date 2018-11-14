@@ -1,10 +1,11 @@
 <html>
 <head>
-    <script src="//unpkg.com/jquery@3.1.1/dist/jquery.min.js"></script>
-    <link  href="//unpkg.com/bootstrap@4/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link  href="https://unpkg.com/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <script src="//unpkg.com/vue-blocks/dist/vue-blocks.js"></script>
-    <script src="//unpkg.com/axios/dist/axios.min.js"></script>
+    <!-- not the most security-wise to expose node_modules, but this is an internal tool. -->
+    <script src="/node_modules/jquery/dist/jquery.min.js"></script>
+    <link  href="/node_modules/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link  href="/node_modules/font-awesome/css/font-awesome.min.css" rel="stylesheet">
+    <script src="/node_modules/vue-blocks/dist/vue-blocks.js"></script>
+    <script src="/node_modules/axios/dist/axios.min.js"></script>
     <link href="/style.css" rel="stylesheet">
 </head>
 <body>
@@ -97,9 +98,11 @@
                 return this.app.data.ACTIVE_MODULES
             },
             inactive_modules() {
-                return this.app.data.MODULES.filter(m => {
-                    return !~this.active_modules.indexOf(m)
-                })
+                return this.app.data.MODULES
+                    .map(m => m.name)
+                    .filter(m => {
+                        return !~this.active_modules.indexOf(m)
+                    })
             }
         }
     }
