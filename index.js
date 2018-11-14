@@ -278,7 +278,7 @@ async function _activate_single_module(name) {
     if (!module) {
         throw new(`Module ${name} could not be found.`);
     }
-    var moduleObject = require(`${module.path}/module`);
+    var moduleObject = {...require(`${module.path}/module`),module};
 
     const conf = kontrolRc && kontrolRc.activate || false
 
@@ -392,7 +392,7 @@ async function _deactivate_single_module(name, argv) {
     if (!module) {
         throw new(`Module ${name} could not be found.`);
     }
-    var moduleObject = require(`${module.path}/module`);
+    var moduleObject = {...require(`${module.path}/module`), module};
 
     const conf = kontrolRc || false
 
