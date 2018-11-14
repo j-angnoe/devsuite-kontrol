@@ -9,7 +9,7 @@ const path = require('path');
 const glob = require('glob');
 const {spawn,exec} = require('child-process-promise');
 
-const ROOT = fs.realpathSync(path.join(__dirname,'..'));
+const ROOT = fs.realpathSync(process.cwd());
 
 const MODULE_DIR = path.join(ROOT, 'modules');
 const ACTIVE_MODULES_FILE = path.join(MODULE_DIR, '.active');
@@ -244,7 +244,7 @@ async function command_activate_module(argv) {
             await _activate_single_module(module);
         } else if (module in MODULE_BUNDLES) {
             // Sequential, because of interactivity.
-            for (let m in MODULE_BUNDLES[module]) {
+            for (let m of MODULE_BUNDLES[module]) {
                 await _activate_single_module(m);
             }
         }
