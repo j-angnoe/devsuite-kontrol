@@ -363,7 +363,7 @@ async function _activate_single_module(name) {
         await handler(moduleObject, kontrolRcSharedServices);
     }
 
-    var installScript = path.join(MODULE_DIR, name, 'install'); 
+    var installScript = path.join(module.path, 'install'); 
     if (fs.existsSync(installScript)) {
         console.log(`Running module install script (${installScript})`);
         await spawn(installScript, {
@@ -374,7 +374,7 @@ async function _activate_single_module(name) {
 
     // Post install scripts will only run if the entire 
     // install (including dependencies) is succesful.
-    var postInstallScript = path.join(MODULE_DIR, name, 'postinstall'); 
+    var postInstallScript = path.join(module.path, 'postinstall'); 
     if (fs.existsSync(postInstallScript)) {
         console.log(`Registering install script (${postInstallScript})`);
         registerPostInstall(() => {
