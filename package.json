@@ -1,6 +1,6 @@
 {
   "name": "@vodafone/devsuite-kontrol",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Development suite control via cli",
   "bin": {
     "kontrol": "./kontrol"
