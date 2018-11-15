@@ -59,14 +59,20 @@ const MODULES = listModules();
 
 var MODULE_CHOICES = MODULES.map(m => m.name).concat(Object.keys(MODULE_BUNDLES));
 
+function outputJson(json) {
+    console.log('output:'+JSON.stringify(json, null, 3));
+}
 // Starts cli dispatch
 require('yargs')
     .option('verbose', {
         alias: 'v',
         describe: 'Put on verbose logging'
     })
+    .option('json', {
+        describe: 'All commands will output machine friendly json'
+    })
     .option('restart', {
-        describe: 'Automatically perform docker-compose restart if needed',
+        describe: 'Automatically perform docker-compose restart if needed after the command runs',
         default: false,
     })
     .command({
@@ -96,11 +102,15 @@ require('yargs')
         },
         handler: command_deactivate_module
     })
-    .command('list', 'List available modules', {}, () => {
-        console.log("Available modules:")
-        console.log(listModules().map(m => {
-            return ` - ${m.name} (${m.path.replace(ROOT, '')})\n`
-        }));
+    .command('list', 'List available modules', {}, argv => {
+        if (argv.json) {
+            Promise.resolve(listModules()).then(outputJson);
+        } else {
+            console.log("Available modules:")
+            console.log(listModules().map(m => {
+                return ` - ${m.name} (${m.path.replace(ROOT, '')})\n`
+            }));
+        }
     })
     .command({
         command: 'info <module>',
@@ -110,18 +120,31 @@ require('yargs')
         },  
         handler: (argv) => {
             var mod = getModule(argv.module)
-            console.log({
+            var output = {
                 module: mod,
                 files: glob.sync(path.join(mod.path, '*'))
-            });
+            };
+            if (argv.json) {
+                outputJson(output);
+            } else {
+                console.log(output);
+            }
         }
     })
-    .command('status', 'List module status', {}, () => {
-        console.log("Module status");
-        MODULES.map(mod => {
+    .command('status', 'List module status', {}, argv => {
+        var data = MODULES.map(mod => {
             var status = ~ACTIVE_MODULES.indexOf(mod.name) ? 'active' : 'inactive';
-            console.log(`${mod.name}: ${status}`)
+            return {...mod, status}
         })
+
+        if (argv.json) {
+            outputJson(data);
+        } else {
+            console.log("Module status");
+            data.map(({name, status}) => {
+                console.log(`${name}: ${status}`)
+            })
+        }
     })
     .demandCommand(1)
     .help()
