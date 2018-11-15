@@ -60,7 +60,9 @@ const MODULES = listModules();
 var MODULE_CHOICES = MODULES.map(m => m.name).concat(Object.keys(MODULE_BUNDLES));
 
 function outputJson(json) {
-    console.log('output:'+JSON.stringify(json, null, 3));
+    console.log('start json output:');
+    console.log(JSON.stringify(json, null, 3));
+    console.log('end json output.');
 }
 // Starts cli dispatch
 require('yargs')
