@@ -9,7 +9,18 @@ const path = require('path');
 const glob = require('glob');
 const {spawn,exec} = require('child-process-promise');
 
-const ROOT = fs.realpathSync(process.cwd());
+function findRootDir() {
+    var dir = process.cwd();
+    while(dir > '/') {
+        if (fs.existsSync(path.join(dir, 'kontrolrc.js'))) {
+            return dir;
+        }
+        dir = path.dirname(dir);
+    }
+    throw new Error(`Could not find a kontrolrc.js file from ` + process.cwd() + '`');
+}
+
+const ROOT = findRootDir();
 
 const MODULE_DIR = path.join(ROOT, 'modules');
 const ACTIVE_MODULES_FILE = path.join(MODULE_DIR, '.active');
@@ -59,13 +70,9 @@ const MODULES = listModules();
 
 var MODULE_CHOICES = MODULES.map(m => m.name).concat(Object.keys(MODULE_BUNDLES));
 
-function outputJson(json) {
-    console.log('start json output:');
-    console.log(JSON.stringify(json, null, 3));
-    console.log('end json output.');
-}
+
 // Starts cli dispatch
-require('yargs')
+var argv = require('yargs')
     .option('verbose', {
         alias: 'v',
         describe: 'Put on verbose logging'
@@ -105,13 +112,13 @@ require('yargs')
         handler: command_deactivate_module
     })
     .command('list', 'List available modules', {}, argv => {
-        if (argv.json) {
+        if (isJsonMode(argv)) {
             Promise.resolve(listModules()).then(outputJson);
         } else {
             console.log("Available modules:")
             console.log(listModules().map(m => {
-                return ` - ${m.name} (${m.path.replace(ROOT, '')})\n`
-            }));
+                return ` - ${m.name} (${m.path.replace(ROOT, '')})`
+            }).join("\n"));
         }
     })
     .command({
@@ -126,7 +133,7 @@ require('yargs')
                 module: mod,
                 files: glob.sync(path.join(mod.path, '*'))
             };
-            if (argv.json) {
+            if (isJsonMode(argv)) {
                 outputJson(output);
             } else {
                 console.log(output);
@@ -139,7 +146,7 @@ require('yargs')
             return {...mod, status}
         })
 
-        if (argv.json) {
+        if (isJsonMode(argv)) {
             outputJson(data);
         } else {
             console.log("Module status");
@@ -152,6 +159,16 @@ require('yargs')
     .help()
     .argv
 ;
+
+function outputJson(json) {
+    process.stderr.write('start json output:');
+    console.log(JSON.stringify(json, null, 3));
+    process.stderr.write('end json output.');
+}
+
+function isJsonMode(argv) {
+    return argv.json;
+}
 
 function listModules() {
     var INTERNAL_MODULES = glob.sync(path.join(MODULE_DIR,'*','module.json')).map(file => {
