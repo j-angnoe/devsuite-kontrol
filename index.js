@@ -21,6 +21,7 @@ function findRootDir() {
 }
 
 const ROOT = findRootDir();
+console.log("Working from " + ROOT);
 
 const MODULE_DIR = path.join(ROOT, 'modules');
 const ACTIVE_MODULES_FILE = path.join(MODULE_DIR, '.active');
