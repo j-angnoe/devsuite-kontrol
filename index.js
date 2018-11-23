@@ -88,7 +88,7 @@ var argv = require('yargs')
     .command({
         command: 'generate',
         aliases: ['gen','g'],
-        desc: 'Generates dynamic kahuna gateway config and docker-compose.yml',
+        desc: 'Generates dynamic gateway config and docker-compose.yml',
         handler: command_generate
     })
     .command({
