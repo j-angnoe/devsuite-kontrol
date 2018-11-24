@@ -1,6 +1,6 @@
 {
   "name": "devsuite-kontrol",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Development suite control via cli",
   "bin": {
     "kontrol": "./kontrol"
