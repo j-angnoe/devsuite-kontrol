@@ -9,6 +9,10 @@
   "author": "Joshua Angnoe <joshua@fluxfx.nl>",
   "license": "BDS-2-Clause",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/j-angnoe/devsuite-kontrol.git"
+  },
   "dependencies": {
     "child-process-promise": "^2.2.1",
     "glob": "^7.1.3",
