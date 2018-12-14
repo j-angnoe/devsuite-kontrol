@@ -21,7 +21,7 @@ function findRootDir() {
 }
 
 const ROOT = findRootDir();
-console.log("Working from " + ROOT);
+// console.log("Working from " + ROOT);
 
 const MODULE_DIR = path.join(ROOT, 'modules');
 const ACTIVE_MODULES_FILE = path.join(MODULE_DIR, '.active');
@@ -154,6 +154,17 @@ var argv = require('yargs')
             data.map(({name, status}) => {
                 console.log(`${name}: ${status}`)
             })
+        }
+    })
+    .command('*', 'Run commands in ' + ROOT, {}, argv => {
+        var args = process.argv.slice(2);
+        if (args.length) {
+            return spawn(args.shift(), args, {
+                stdio: 'inherit',
+                cwd: ROOT
+            });
+        } else {
+            console.log("Run commands in directory " + ROOT);
         }
     })
     .demandCommand(1)
